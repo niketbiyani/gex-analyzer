@@ -9,10 +9,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Add Risk-Management directory to system path to import dhan_api
-risk_mgmt_path = "/Users/radhagopinath/.gemini/antigravity/scratch/Risk-Management"
-if risk_mgmt_path not in sys.path:
-    sys.path.append(risk_mgmt_path)
+# Resolve Risk-Management path dynamically to support Mac and VPS
+possible_paths = [
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../Risk-Management")),
+    "/root/Risk-Management",
+    "/Users/radhagopinath/.gemini/antigravity/scratch/Risk-Management"
+]
+
+for p in possible_paths:
+    if os.path.exists(p) and p not in sys.path:
+        sys.path.append(p)
 
 try:
     from dhan_api import DhanAPI
