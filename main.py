@@ -297,6 +297,12 @@ def generate_mock_chain(index_name, spot_override=None, days_offset=0):
 
 # ── Flask API Endpoints ─────────────────────────────────────────────
 
+import time
+
+# Simple raw option chain cache to prevent Dhan API rate limits (15 seconds TTL)
+_raw_chain_cache = {}  # { index_name: { "timestamp": float, "expiry": str, "data": dict } }
+_CACHE_TTL = 15.0  # seconds
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -311,30 +317,51 @@ def get_option_chain():
     dhan = DhanAdapter()
     
     data = None
-    if dhan.is_connected:
+    closest_expiry = ""
+    current_time = time.time()
+    
+    # Check cache first
+    cached = _raw_chain_cache.get(index_name)
+    if cached and (current_time - cached["timestamp"] < _CACHE_TTL):
+        logger.info("Using cached raw option chain for %s (age: %.1fs)", index_name, current_time - cached["timestamp"])
+        data = cached["data"]
+        closest_expiry = cached["expiry"]
+    elif dhan.is_connected:
         try:
             # Fetch available expiries and pick the closest one
             expiries = dhan.get_expiry_dates(index_name)
             closest_expiry = expiries[0] if expiries else ""
             
-            # Fetch option chain from Dhan API
-            data = dhan.get_option_chain_data(index_name, closest_expiry)
-            if data and data.get("spot") > 0:
-                spot = data["spot"]
-                # Apply manual spot override if user adjusted slider
-                if spot_override is not None:
-                    spot = float(spot_override)
-                
-                # Assume 3 days to expiry for GEX calculation
-                t = 3.0 / 365.25
-                lot_size = INDEX_PARAMS.get(index_name, {"lot_size": 75})["lot_size"]
-                
-                result = process_gex_chain(spot, data["chain"], lot_size, t)
-                result["source"] = "DHAN_API"
-                result["expiry"] = closest_expiry
-                return jsonify(result)
+            if closest_expiry:
+                # Fetch option chain from Dhan API
+                data = dhan.get_option_chain_data(index_name, closest_expiry)
+                if data and data.get("spot") > 0:
+                    # Update cache
+                    _raw_chain_cache[index_name] = {
+                        "timestamp": current_time,
+                        "expiry": closest_expiry,
+                        "data": data
+                    }
         except Exception as e:
             logger.error("Dhan API fetch failed, falling back to simulated data: %s", e)
+            
+    if data and data.get("spot") > 0:
+        try:
+            spot = data["spot"]
+            # Apply manual spot override if user adjusted slider
+            if spot_override is not None:
+                spot = float(spot_override)
+            
+            # Assume 3 days to expiry for GEX calculation
+            t = 3.0 / 365.25
+            lot_size = INDEX_PARAMS.get(index_name, {"lot_size": 75})["lot_size"]
+            
+            result = process_gex_chain(spot, data["chain"], lot_size, t)
+            result["source"] = "DHAN_API"
+            result["expiry"] = closest_expiry
+            return jsonify(result)
+        except Exception as e:
+            logger.error("Failed to process GEX chain from Dhan: %s", e)
             
     # Fallback/Simulation mode
     if spot_override is not None:
