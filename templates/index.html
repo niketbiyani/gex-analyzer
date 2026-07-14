@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gamma Exposure (GEX) Quantitative Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@latest"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="obsidian-theme">
+    <div class="app-container">
+        <!-- Sidebar Navigation & Settings -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo-icon"><i data-lucide="activity"></i></div>
+                <div class="brand-text">
+                    <h2>ANTIGRAVITY</h2>
+                    <span>QUANT ENGINE</span>
+                </div>
+            </div>
+            
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="live-gex">
+                    <i data-lucide="bar-chart-2"></i> Live GEX Analyzer
+                </button>
+                <button class="nav-item" data-tab="ocr-scanner">
+                    <i data-lucide="scan-eye"></i> GEX Image Scanner
+                </button>
+            </nav>
+
+            <div class="sidebar-divider"></div>
+
+            <!-- Parameters Panel -->
+            <div class="settings-section">
+                <h3><i data-lucide="sliders"></i> Parameters</h3>
+                
+                <div class="control-group">
+                    <label for="index-select">Underlying Index</label>
+                    <select id="index-select" class="custom-select">
+                        <option value="NIFTY" selected>NIFTY 50 (Lot: 75)</option>
+                        <option value="BANKNIFTY">BANKNIFTY (Lot: 15)</option>
+                        <option value="SENSEX">SENSEX (Lot: 10)</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="expiry-select">Expiry Date</label>
+                    <select id="expiry-select" class="custom-select">
+                        <option value="closest">Closest Expiry (Auto)</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <div class="slider-label">
+                        <label for="spot-slider">Spot Price Offset</label>
+                        <span id="spot-offset-val">0.00%</span>
+                    </div>
+                    <input type="range" id="spot-slider" min="-3" max="3" step="0.1" value="0" class="custom-slider">
+                    <span class="slider-hint">Simulate index spot movements</span>
+                </div>
+
+                <button id="reset-params" class="btn btn-secondary">
+                    <i data-lucide="rotate-ccw"></i> Reset Parameters
+                </button>
+            </div>
+
+            <!-- Feed Status -->
+            <div class="feed-status-card">
+                <div class="status-indicator">
+                    <span class="status-dot pulsing" id="status-dot"></span>
+                    <span id="status-text">Connecting to Live Feed...</span>
+                </div>
+                <span class="status-detail" id="status-detail">Mode: Simulated</span>
+            </div>
+        </aside>
+
+        <!-- Main Dashboard Content -->
+        <main class="main-content">
+            <!-- Tabs container -->
+            <div class="tab-content active" id="tab-live-gex">
+                <!-- Header Status Row -->
+                <header class="dashboard-header">
+                    <div class="header-title">
+                        <h1 id="current-index-display">NIFTY 50 GEX Structure</h1>
+                        <p class="subtitle" id="expiry-display">Loading nearest expiry...</p>
+                    </div>
+                    <div class="price-ticker">
+                        <div class="ticker-label">SPOT PRICE</div>
+                        <div class="ticker-value" id="spot-price-display">00,000.00</div>
+                        <div class="ticker-change positive" id="price-change-display">+0.00%</div>
+                    </div>
+                </header>
+
+                <!-- Metric Cards Grid -->
+                <div class="metrics-grid">
+                    <div class="metric-card shadow-glow-cyan" id="card-total-gex">
+                        <div class="metric-icon cyan"><i data-lucide="database"></i></div>
+                        <div class="metric-details">
+                            <span class="metric-label">TOTAL NET GEX</span>
+                            <h3 class="metric-value" id="metric-total-gex">0.00 Cr</h3>
+                            <span class="metric-subtext" id="metric-regime">Positive Gamma Zone</span>
+                        </div>
+                    </div>
+
+                    <div class="metric-card shadow-glow-gold" id="card-call-wall">
+                        <div class="metric-icon gold"><i data-lucide="trending-up"></i></div>
+                        <div class="metric-details">
+                            <span class="metric-label">CALL WALL (RESISTANCE)</span>
+                            <h3 class="metric-value" id="metric-call-wall">00,000</h3>
+                            <span class="metric-subtext" id="metric-call-wall-dist">Distance: +0.00%</span>
+                        </div>
+                    </div>
+
+                    <div class="metric-card shadow-glow-pink" id="card-put-wall">
+                        <div class="metric-icon pink"><i data-lucide="trending-down"></i></div>
+                        <div class="metric-details">
+                            <span class="metric-label">PUT WALL (SUPPORT)</span>
+                            <h3 class="metric-value" id="metric-put-wall">00,000</h3>
+                            <span class="metric-subtext" id="metric-put-wall-dist">Distance: -0.00%</span>
+                        </div>
+                    </div>
+
+                    <div class="metric-card shadow-glow-blue" id="card-gamma-flip">
+                        <div class="metric-icon blue"><i data-lucide="shuffle"></i></div>
+                        <div class="metric-details">
+                            <span class="metric-label">GAMMA FLIP LEVEL</span>
+                            <h3 class="metric-value" id="metric-gamma-flip">00,000</h3>
+                            <span class="metric-subtext" id="metric-gamma-flip-dist">Distance: +0.00%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Three-Pane Chart Structure -->
+                <div class="charts-layout">
+                    <!-- Pane 1: Intraday Price & GEX Horizontal Overlays -->
+                    <div class="chart-container-card pane-price">
+                        <div class="chart-header">
+                            <h4><i data-lucide="candlestick-chart"></i> Intraday Price & GEX Walls</h4>
+                            <div class="legend">
+                                <span class="legend-item"><span class="legend-color gold"></span> Call Wall</span>
+                                <span class="legend-item"><span class="legend-color pink"></span> Put Wall</span>
+                                <span class="legend-item"><span class="legend-color blue"></span> Gamma Flip</span>
+                            </div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-price-walls"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="charts-split">
+                        <!-- Pane 2: Delta flow oscillator -->
+                        <div class="chart-container-card pane-oscillator">
+                            <div class="chart-header">
+                                <h4><i data-lucide="gauge"></i> Net Gamma Flow Pressure</h4>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-delta-oscillator"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Pane 3: Strike-by-strike GEX profiles -->
+                        <div class="chart-container-card pane-profile">
+                            <div class="chart-header">
+                                <h4><i data-lucide="bar-chart-3"></i> Strike GEX Profile</h4>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-gex-profile"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Execution Strategy Panel & Options Grid Grid -->
+                <div class="bottom-grid">
+                    <!-- Strategy advisor -->
+                    <div class="dashboard-card strategy-card" id="strategy-panel">
+                        <div class="card-header">
+                            <h3><i data-lucide="shield-alert"></i> Quantitative Execution Strategy</h3>
+                            <span class="badge" id="strategy-regime-badge">Positive Gamma</span>
+                        </div>
+                        
+                        <div class="strategy-content">
+                            <div class="strategy-section">
+                                <div class="section-title"><i data-lucide="eye"></i> Volatility Outlook</div>
+                                <p id="strat-volatility-text">Market makers are stabilizing price. Volatility is expected to compress. Rallies are likely to fade and selloffs are likely to be bought. Buy VIX puts or sell option premiums.</p>
+                            </div>
+
+                            <div class="strategy-section">
+                                <div class="section-title"><i data-lucide="trending-up"></i> Dynamic Hedging Strategy</div>
+                                <p id="strat-hedging-text">No immediate dealer hedging triggers. Dealers are selling calls above and selling puts below spot, shorting volatility. Gamma decay is high. Scale down long gamma strategies.</p>
+                            </div>
+
+                            <div class="strategy-section">
+                                <div class="section-title"><i data-lucide="swatchbook"></i> Option Structure Playbook</div>
+                                <ul id="strat-playbook-list">
+                                    <li>Sell premium: Open standard **Iron Condors** or **Short Strangles** centered at 24,050.</li>
+                                    <li>Buy dips near Put Wall (23,900) with defined risk Bull Call spreads.</li>
+                                    <li>Avoid buying outright high-IV naked calls or puts due to Theta decay.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GEX Options Chain Grid -->
+                    <div class="dashboard-card grid-card">
+                        <div class="card-header">
+                            <h3><i data-lucide="grid"></i> Option Chain GEX Grid</h3>
+                            <span class="hint">Top strikes sorted by absolute GEX</span>
+                        </div>
+                        <div class="table-container">
+                            <table class="options-table">
+                                <thead>
+                                    <tr>
+                                        <th>Call GEX</th>
+                                        <th>Call OI</th>
+                                        <th>Strike</th>
+                                        <th>Put OI</th>
+                                        <th>Put GEX</th>
+                                        <th>Net GEX</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="options-chain-tbody">
+                                    <!-- Populated dynamically -->
+                                    <tr>
+                                        <td colspan="6" class="text-center">Loading options data...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OCR Scanner Tab -->
+            <div class="tab-content" id="tab-ocr-scanner">
+                <header class="dashboard-header">
+                    <div class="header-title">
+                        <h1>GEX Image Scanner (OCR)</h1>
+                        <p class="subtitle">Upload a GEX chart screenshot (Bloomberg, SpotGamma, Tier1) to extract structural levels</p>
+                    </div>
+                </header>
+
+                <div class="scanner-layout">
+                    <!-- Dropzone -->
+                    <div class="scanner-card dropzone-card" id="dropzone">
+                        <input type="file" id="file-input" accept="image/*" class="file-input">
+                        <div class="dropzone-content">
+                            <div class="scanner-laser-container" id="scanner-laser-container">
+                                <i data-lucide="upload-cloud" class="upload-icon"></i>
+                                <div class="scan-line" id="scan-line"></div>
+                            </div>
+                            <h3>Drag & Drop GEX Chart Screenshot</h3>
+                            <p>or click to browse your local filesystem</p>
+                            <span class="file-limits">Supports PNG, JPG, JPEG (Max 10MB)</span>
+                        </div>
+                    </div>
+
+                    <!-- Extracted levels preview -->
+                    <div class="scanner-card results-card" id="ocr-results-panel">
+                        <div class="card-header">
+                            <h3><i data-lucide="terminal"></i> Extracted GEX Parameters</h3>
+                            <span class="badge badge-inactive" id="ocr-status-badge">Awaiting Image</span>
+                        </div>
+
+                        <div class="ocr-placeholder-text" id="ocr-placeholder">
+                            Upload a chart to view extracted values and generate custom strategies.
+                        </div>
+
+                        <div class="ocr-results-content hidden" id="ocr-results">
+                            <div class="extracted-metrics">
+                                <div class="metric-row">
+                                    <span class="row-label">Detected Spot Price</span>
+                                    <span class="row-val font-code" id="ocr-spot">24,082.40</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="row-label">Detected Gamma Flip</span>
+                                    <span class="row-val font-code text-blue" id="ocr-flip">24,040.00</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="row-label">Detected Call Wall</span>
+                                    <span class="row-val font-code text-gold" id="ocr-call-wall">24,200.00</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="row-label">Detected Put Wall</span>
+                                    <span class="row-val font-code text-pink" id="ocr-put-wall">23,900.00</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="row-label">Calculated Net GEX</span>
+                                    <span class="row-val font-code" id="ocr-gex">+4.82 Cr</span>
+                                </div>
+                            </div>
+
+                            <button id="apply-ocr-levels" class="btn btn-primary">
+                                <i data-lucide="check"></i> Load Levels Into Dashboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Custom Script -->
+    <script src="/static/app.js"></script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
