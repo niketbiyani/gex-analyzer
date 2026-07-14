@@ -6,6 +6,7 @@ Loads credentials from local environment and wraps the Risk-Management dhan_api 
 import os
 import sys
 import logging
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,19 @@ class DhanAdapter:
             logger.error("Failed to initialize Dhan API client: %s", e)
             self.is_connected = False
 
+    def get_fallback_expiry(self, index_name="NIFTY") -> str:
+        """Calculate the next Thursday (NIFTY/SENSEX) or Wednesday (BANKNIFTY) expiry date."""
+        today = datetime.now()
+        target_weekday = 2 if index_name.upper() == "BANKNIFTY" else 3
+        days_ahead = target_weekday - today.weekday()
+        if days_ahead < 0:
+            days_ahead += 7
+        elif days_ahead == 0:
+            if today.hour >= 16:  # After market close, use next week
+                days_ahead += 7
+        expiry_date = today + timedelta(days=days_ahead)
+        return expiry_date.strftime("%Y-%m-%d")
+
     def attempt_token_refresh(self) -> bool:
         """Attempt to refresh the Dhan API token using token_manager."""
         try:
@@ -78,7 +92,7 @@ class DhanAdapter:
     def get_expiry_dates(self, index_name="NIFTY"):
         """Get available expiry dates for the selected index."""
         if not self.is_connected or not self.api:
-            return []
+            return [self.get_fallback_expiry(index_name)]
 
         uid_map = {"NIFTY": 13, "BANKNIFTY": 25, "SENSEX": 1}
         underlying_id = uid_map.get(index_name.upper(), 13)
@@ -89,16 +103,26 @@ class DhanAdapter:
                 logger.warning("Expiry list empty. Attempting token refresh...")
                 if self.attempt_token_refresh():
                     expiries = self.api.get_expiry_list(underlying_id=underlying_id)
+            
+            if not expiries:
+                fallback = self.get_fallback_expiry(index_name)
+                logger.warning("Dhan returned empty expiry list. Using fallback date: %s", fallback)
+                return [fallback]
+                
             return sorted(expiries)
         except Exception as e:
             logger.error("Error fetching expiry list from Dhan for %s: %s", index_name, e)
             if self.attempt_token_refresh():
                 try:
                     expiries = self.api.get_expiry_list(underlying_id=underlying_id)
-                    return sorted(expiries)
+                    if expiries:
+                        return sorted(expiries)
                 except Exception:
                     pass
-            return []
+            
+            fallback = self.get_fallback_expiry(index_name)
+            logger.warning("Could not fetch expiries. Using fallback date: %s", fallback)
+            return [fallback]
 
     def get_option_chain_data(self, index_name="NIFTY", expiry_date=""):
         """
@@ -119,6 +143,9 @@ class DhanAdapter:
             "SENSEX": (1, "BSE_IDX")
         }
         underlying_id, exchange_segment = uid_map.get(index_name, (13, "IDX_I"))
+
+        if not expiry_date:
+            expiry_date = self.get_fallback_expiry(index_name)
 
         try:
             logger.info("Fetching option chain for %s, expiry %s...", index_name, expiry_date)
