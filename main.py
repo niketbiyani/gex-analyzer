@@ -195,22 +195,15 @@ def process_gex_chain(spot_price, raw_chain, lot_size, t, r=0.065):
             max_put_gex_mag = abs(gex_item["put_gex"])
             put_wall = gex_item["strike"]
             
-    # Find Gamma Flip Level
+# Find Gamma Flip Level: Strike where Net GEX changes sign in the ATM region (+/- 5% of spot)
     gamma_flip = spot_price
-    if len(gex_list) > 1:
-        # Sort strikes
-        gex_sorted = sorted(gex_list, key=lambda x: x["strike"])
-        # Perform cumulative sum of net GEX to find crossing
-        cum_gex = 0.0
-        cum_gex_list = []
-        for item in gex_sorted:
-            cum_gex += item["net_gex"]
-            cum_gex_list.append((item["strike"], cum_gex))
-            
-        # Find where cumulative GEX crosses zero
-        for i in range(len(cum_gex_list) - 1):
-            s1, g1 = cum_gex_list[i]
-            s2, g2 = cum_gex_list[i+1]
+    atm_gex = [item for item in gex_list if abs(item["strike"] - spot_price) / spot_price <= 0.05]
+    if len(atm_gex) > 1:
+        atm_gex_sorted = sorted(atm_gex, key=lambda x: x["strike"])
+        # Find where net_gex crosses from negative to positive (or vice versa)
+        for i in range(len(atm_gex_sorted) - 1):
+            s1, g1 = atm_gex_sorted[i]["strike"], atm_gex_sorted[i]["net_gex"]
+            s2, g2 = atm_gex_sorted[i+1]["strike"], atm_gex_sorted[i+1]["net_gex"]
             if (g1 <= 0 <= g2) or (g1 >= 0 >= g2):
                 if g2 != g1:
                     weight = abs(g1) / abs(g2 - g1)

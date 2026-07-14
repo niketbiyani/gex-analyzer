@@ -164,18 +164,24 @@ function setupCharts() {
     // 2. Delta Flow Oscillator Chart
     const ctxOsc = document.getElementById('chart-delta-oscillator').getContext('2d');
     chartDeltaOscillator = new Chart(ctxOsc, {
-        type: 'line',
+        type: 'bar',
         data: {
             labels: currentState.flowHistory.map(h => h.time),
             datasets: [{
                 label: 'Delta Flow Pressure',
                 data: currentState.flowHistory.map(h => h.flow),
-                borderColor: '#00f0ff',
-                backgroundColor: 'rgba(0, 240, 255, 0.1)',
-                fill: true,
-                borderWidth: 1.5,
-                pointRadius: 0,
-                tension: 0.2
+                backgroundColor: function(context) {
+                    const val = context.raw;
+                    return val >= 0 ? 'rgba(0, 240, 255, 0.5)' : 'rgba(255, 0, 127, 0.5)';
+                },
+                borderColor: function(context) {
+                    const val = context.raw;
+                    return val >= 0 ? '#00f0ff' : '#ff007f';
+                },
+                borderWidth: 1,
+                barPercentage: 0.85,
+                categoryPercentage: 0.85,
+                borderRadius: 1
             }]
         },
         options: {
