@@ -10,8 +10,25 @@ from dotenv import load_dotenv
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Load env variables
-load_dotenv()
+# Load env variables dynamically, prioritizing the Risk-Management folder configuration
+possible_env_paths = [
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../Risk-Management/.env")),
+    "/root/Risk-Management/.env",
+    "/Users/radhagopinath/.gemini/antigravity/scratch/Risk-Management/.env",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), ".env"))
+]
+
+loaded_env_path = None
+for path in possible_env_paths:
+    if os.path.exists(path):
+        load_dotenv(path, override=True)
+        logger.info("Loaded configuration from: %s", path)
+        loaded_env_path = path
+        break
+
+if not loaded_env_path:
+    load_dotenv()
+    logger.info("Loaded configuration from default .env")
 
 app = Flask(__name__)
 CORS(app)

@@ -56,6 +56,25 @@ class DhanAdapter:
             logger.error("Failed to initialize Dhan API client: %s", e)
             self.is_connected = False
 
+    def attempt_token_refresh(self) -> bool:
+        """Attempt to refresh the Dhan API token using token_manager."""
+        try:
+            from token_manager import refresh_token, is_token_refresh_configured
+            if is_token_refresh_configured():
+                logger.info("Dhan token is invalid. Invoking Risk-Management token_manager to refresh...")
+                # Exposes refresh_token(dhan_api) which generates a new token, updates .env, and reinitializes client
+                success = refresh_token(self.api)
+                if success:
+                    # Update local reference of access token
+                    self.access_token = self.api.access_token
+                    logger.info("Successfully refreshed and reinitialized Dhan token!")
+                    return True
+            else:
+                logger.warning("Auto token refresh is not configured (DHAN_PIN or DHAN_TOTP_SECRET missing)")
+        except Exception as e:
+            logger.error("Failed to execute token refresh flow: %s", e)
+        return False
+
     def get_expiry_dates(self, index_name="NIFTY"):
         """Get available expiry dates for the selected index."""
         if not self.is_connected or not self.api:
@@ -66,9 +85,19 @@ class DhanAdapter:
 
         try:
             expiries = self.api.get_expiry_list(underlying_id=underlying_id)
+            if not expiries:
+                logger.warning("Expiry list empty. Attempting token refresh...")
+                if self.attempt_token_refresh():
+                    expiries = self.api.get_expiry_list(underlying_id=underlying_id)
             return sorted(expiries)
         except Exception as e:
             logger.error("Error fetching expiry list from Dhan for %s: %s", index_name, e)
+            if self.attempt_token_refresh():
+                try:
+                    expiries = self.api.get_expiry_list(underlying_id=underlying_id)
+                    return sorted(expiries)
+                except Exception:
+                    pass
             return []
 
     def get_option_chain_data(self, index_name="NIFTY", expiry_date=""):
@@ -98,6 +127,17 @@ class DhanAdapter:
                 expiry=expiry_date,
                 exchange_segment=exchange_segment
             )
+
+            # Check if query failed (potentially due to stale token) and refresh if needed
+            if not isinstance(result, dict) or result.get("status") != "success":
+                logger.warning("Dhan option chain query failed. Attempting token refresh...")
+                if self.attempt_token_refresh():
+                    logger.info("Retrying option chain query with new token...")
+                    result = self.api.get_option_chain(
+                        underlying_id=underlying_id,
+                        expiry=expiry_date,
+                        exchange_segment=exchange_segment
+                    )
 
             if not isinstance(result, dict) or result.get("status") != "success":
                 logger.error("Dhan option chain returned failure status: %s", result)
