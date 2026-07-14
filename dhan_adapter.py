@@ -125,11 +125,33 @@ class DhanAdapter:
         underlying_id = uid_map.get(index_name.upper(), 13)
 
         try:
-            expiries = self.api.get_expiry_list(underlying_id=underlying_id)
+            # Bypass the buggy api.get_expiry_list wrapper and query raw API directly
+            response = self.api.dhan.expiry_list(
+                under_security_id=underlying_id,
+                under_exchange_segment=self.api.IDX_I
+            )
+            
+            expiries = []
+            if isinstance(response, dict) and "data" in response:
+                data = response["data"]
+                if isinstance(data, dict) and "data" in data:
+                    expiries = data["data"]
+                elif isinstance(data, list):
+                    expiries = data
+
             if not expiries:
                 logger.warning("Expiry list empty. Attempting token refresh...")
                 if self.attempt_token_refresh():
-                    expiries = self.api.get_expiry_list(underlying_id=underlying_id)
+                    response = self.api.dhan.expiry_list(
+                        under_security_id=underlying_id,
+                        under_exchange_segment=self.api.IDX_I
+                    )
+                    if isinstance(response, dict) and "data" in response:
+                        data = response["data"]
+                        if isinstance(data, dict) and "data" in data:
+                            expiries = data["data"]
+                        elif isinstance(data, list):
+                            expiries = data
             
             if not expiries:
                 fallback = self.get_fallback_expiry(index_name)
@@ -141,7 +163,15 @@ class DhanAdapter:
             logger.error("Error fetching expiry list from Dhan for %s: %s", index_name, e)
             if self.attempt_token_refresh():
                 try:
-                    expiries = self.api.get_expiry_list(underlying_id=underlying_id)
+                    response = self.api.dhan.expiry_list(
+                        under_security_id=underlying_id,
+                        under_exchange_segment=self.api.IDX_I
+                    )
+                    expiries = []
+                    if isinstance(response, dict) and "data" in response:
+                        data = response["data"]
+                        if isinstance(data, dict) and "data" in data:
+                            expiries = data["data"]
                     if expiries:
                         return sorted(expiries)
                 except Exception:
@@ -172,7 +202,8 @@ class DhanAdapter:
         underlying_id, exchange_segment = uid_map.get(index_name, (13, "IDX_I"))
 
         if not expiry_date:
-            expiry_date = self.get_fallback_expiry(index_name)
+            expiries = self.get_expiry_dates(index_name)
+            expiry_date = expiries[0] if expiries else self.get_fallback_expiry(index_name)
 
         try:
             logger.info("Fetching option chain for %s, expiry %s...", index_name, expiry_date)
